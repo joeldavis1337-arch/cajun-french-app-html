@@ -240,10 +240,21 @@
       {word:"Et",           pron:"AY",             meaning:"And (chains)", ex:"Viens et assis-toi"},
     ];
 
+    function getApiKey() {
+      return localStorage.getItem("cajun_api_key") || "";
+    }
+
     async function translateToCajun(english) {
+      const apiKey = getApiKey();
+      if (!apiKey) throw new Error("NO_KEY");
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{
+          "Content-Type":"application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
         body:JSON.stringify({
           model:"claude-sonnet-4-20250514",
           max_tokens:1000,
@@ -346,11 +357,13 @@ Respond ONLY with valid JSON, no markdown:
     }
 
     function TranslateTab() {
-      const [input,   setInput]   = useState("");
-      const [result,  setResult]  = useState(null);
-      const [loading, setLoading] = useState(false);
-      const [error,   setError]   = useState(null);
-      const [saved,   setSaved]   = useState([]);
+      const [input,      setInput]      = useState("");
+      const [result,     setResult]     = useState(null);
+      const [loading,    setLoading]    = useState(false);
+      const [error,      setError]      = useState(null);
+      const [saved,      setSaved]      = useState([]);
+      const [showKeyModal, setShowKeyModal] = useState(!localStorage.getItem("cajun_api_key"));
+      const [keyInput,   setKeyInput]   = useState("");
 
       const run = async () => {
         if (!input.trim()) return;
@@ -359,7 +372,11 @@ Respond ONLY with valid JSON, no markdown:
           const data = await translateToCajun(input.trim());
           setResult({english:input.trim(),...data});
         } catch(e) {
-          setError("Translation failed — check your connection and try again.");
+          if (e.message === "NO_KEY") {
+            setShowKeyModal(true);
+          } else {
+            setError("Translation failed — check your connection and try again.");
+          }
         }
         setLoading(false);
       };
@@ -369,6 +386,11 @@ Respond ONLY with valid JSON, no markdown:
           <div className="tip">
             <strong>How to use</strong>
             Type any English phrase and get authentic Cajun French with full pronunciation and a word-by-word breakdown.
+            {localStorage.getItem("cajun_api_key") && (
+              <span style={{display:"block",marginTop:"6px"}}>
+                <button onClick={()=>{localStorage.removeItem("cajun_api_key");setShowKeyModal(true);}} style={{background:"none",border:"none",color:"#7B8EAA",fontSize:".74rem",fontFamily:"'DM Mono',monospace",cursor:"pointer",padding:0,textDecoration:"underline"}}>change API key</button>
+              </span>
+            )}
           </div>
           <div className="input-block">
             <div className="input-label"><span className="dot"/>English phrase</div>
@@ -434,6 +456,37 @@ Respond ONLY with valid JSON, no markdown:
                   <button className="del-btn" onClick={()=>setSaved(sv=>sv.filter((_,j)=>j!==i))}>✕</button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {showKeyModal && (
+            <div style={{position:"fixed",inset:0,background:"rgba(7,13,26,.92)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:"24px"}}>
+              <div style={{background:"#0D1627",border:"1px solid #1E3058",borderRadius:"8px",padding:"24px",width:"100%",maxWidth:"380px"}}>
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1.2rem",color:"#E8C06A",marginBottom:"8px"}}>⚜ Anthropic API Key</div>
+                <div style={{fontSize:".82rem",color:"#7B8EAA",lineHeight:"1.6",marginBottom:"16px"}}>
+                  To use the translator you need a free Anthropic API key.<br/><br/>
+                  Get one at <strong style={{color:"#F0E8D0"}}>console.anthropic.com</strong> → API Keys → Create Key.<br/><br/>
+                  Your key is saved only on this device and never shared.
+                </div>
+                <input
+                  type="password"
+                  placeholder="sk-ant-..."
+                  value={keyInput}
+                  onChange={e=>setKeyInput(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter"&&keyInput.trim()){localStorage.setItem("cajun_api_key",keyInput.trim());setShowKeyModal(false);}}}
+                  style={{width:"100%",background:"#111E35",border:"1px solid #1E3058",borderRadius:"4px",padding:"10px 12px",color:"#F0E8D0",fontFamily:"'DM Mono',monospace",fontSize:".85rem",outline:"none",marginBottom:"12px"}}
+                />
+                <button
+                  onClick={()=>{if(keyInput.trim()){localStorage.setItem("cajun_api_key",keyInput.trim());setShowKeyModal(false);}}}
+                  disabled={!keyInput.trim()}
+                  style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,#1A3266,#2450A0)",border:"none",borderRadius:"4px",color:"#F0E8D0",fontFamily:"'Playfair Display',serif",fontSize:"1rem",cursor:"pointer",opacity:keyInput.trim()?1:.5}}
+                >
+                  Save Key & Continue
+                </button>
+                <div style={{textAlign:"center",marginTop:"10px"}}>
+                  <button onClick={()=>setShowKeyModal(false)} style={{background:"none",border:"none",color:"#7B8EAA",fontSize:".78rem",cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>dismiss for now</button>
+                </div>
+              </div>
             </div>
           )}
         </div>
